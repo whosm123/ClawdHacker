@@ -1,0 +1,337 @@
+{
+  "pipeline_version": "1.0.0",
+  "name": "ClawedHacker Web Pentest Pipeline",
+  "description": "多阶段Web渗透测试pipeline配置",
+  
+  "stages": {
+    "candidate_discovery": {
+      "description": "阶段1：候选发现 - 主动扫描与指纹识别",
+      "enabled": true,
+      "parallel": true,
+      
+      "subtasks": [
+        {
+          "name": "port_scanning",
+          "tool": "nmap",
+          "command_template": "nmap -sV -sC -O --script=vuln {target}",
+          "timeout": 300,
+          "output_parser": "parsers/nmap.py",
+          "confidence_weight": 0.9
+        },
+        {
+          "name": "web_server_scanning",
+          "tool": "nikto",
+          "command_template": "nikto -h {target} -Plugins all",
+          "timeout": 180,
+          "output_parser": "parsers/nikto.py",
+          "confidence_weight": 0.7
+        },
+        {
+          "name": "technology_fingerprinting",
+          "tool": "whatweb",
+          "command_template": "whatweb -a 3 {target}",
+          "timeout": 60,
+          "output_parser": "parsers/whatweb.py",
+          "confidence_weight": 0.8
+        },
+        {
+          "name": "dns_enumeration",
+          "tool": "dnsrecon",
+          "command_template": "dnsrecon -d {domain} -t std",
+          "timeout": 120,
+          "requires_domain": true,
+          "confidence_weight": 0.6
+        }
+      ],
+      
+      "output_format": {
+        "type": "json",
+        "schema": "schemas/discovery-schema.json",
+        "required_fields": ["ports", "services", "technologies", "vulnerabilities"]
+      },
+      
+      "quality_checks": [
+        "至少发现1个开放端口",
+        "至少识别1项web技术",
+        "扫描覆盖率 > 80%"
+      ]
+    },
+    
+    "evidence_enrichment": {
+      "description": "阶段2：证据补全 - 深度分析与证据收集",
+      "enabled": true,
+      "depends_on": ["candidate_discovery"],
+      "parallel": false,
+      
+      "subtasks": [
+        {
+          "name": "directory_enumeration",
+          "tool": "gobuster",
+          "command_template": "gobuster dir -u {target} -w /usr/share/wordlists/dirb/big.txt -t 50",
+          "timeout": 300,
+          "output_parser": "parsers/gobuster.py",
+          "triggers": ["web_server_detected"]
+        },
+        {
+          "name": "parameter_discovery",
+          "tool": "arjun",
+          "command_template": "arjun -u {target}",
+          "timeout": 120,
+          "output_parser": "parsers/arjun.py",
+          "triggers": ["web_application_detected"]
+        },
+        {
+          "name": "sql_injection_testing",
+          "tool": "sqlmap",
+          "command_template": "sqlmap -u {target} --batch --level=3 --risk=2",
+          "timeout": 600,
+          "output_parser": "parsers/sqlmap.py",
+          "triggers": ["dynamic_content", "parameter_discovered"],
+          "safety_checks": ["no_destructive_operations"]
+        },
+        {
+          "name": "xss_testing",
+          "tool": "xsstrike",
+          "command_template": "xsstrike -u {target} --crawl",
+          "timeout": 300,
+          "output_parser": "parsers/xsstrike.py",
+          "triggers": ["web_application_detected"]
+        }
+      ],
+      
+      "evidence_correlation": {
+        "enabled": true,
+        "rules": [
+          "同一端口的多个发现合并",
+          "同一漏洞的不同证据聚合",
+          "跨工具结果验证"
+        ]
+      },
+      
+      "output_format": {
+        "type": "json",
+        "schema": "schemas/evidence-schema.json",
+        "required_fields": ["findings", "evidence", "confidence_scores"]
+      }
+    },
+    
+    "exploit_generation": {
+      "description": "阶段3：exploit/PoC生成 - 攻击向量构建",
+      "enabled": true,
+      "depends_on": ["evidence_enrichment"],
+      "mode": "rule_based",
+      
+      "generation_methods": {
+        "template_based": {
+          "templates_dir": "templates/exploits/",
+          "supported_vulns": ["sqli", "xss", "rce", "lfi", "xxe"]
+        },
+        
+        "llm_assisted": {
+          "enabled": true,
+          "model": "deepseek/deepseek-chat",
+          "prompt_templates": "prompts/exploit-generation.txt",
+          "temperature": 0.3,
+          "max_tokens": 1000
+        },
+        
+        "searchsploit_integration": {
+          "enabled": true,
+          "command_template": "searchsploit {vulnerability} --json",
+          "timeout": 60
+        }
+      },
+      
+      "validation_requirements": {
+        "minimal": true,
+        "max_steps": 3,
+        "risk_level": "low",
+        "reproducible": true
+      },
+      
+      "output_format": {
+        "type": "json",
+        "schema": "schemas/exploit-schema.json",
+        "required_fields": ["vulnerability", "exploit_vector", "verification_steps", "risk_assessment"]
+      }
+    },
+    
+    "verification": {
+      "description": "阶段4：可复现验证 - 低风险验证测试",
+      "enabled": true,
+      "depends_on": ["exploit_generation"],
+      "mode": "automated",
+      
+      "verification_methods": [
+        {
+          "name": "tool_verification",
+          "description": "使用工具自动验证",
+          "applicable_to": ["sqli", "xss", "lfi"],
+          "tools": ["sqlmap", "xsstrike", "curl"]
+        },
+        {
+          "name": "manual_verification",
+          "description": "人工验证步骤",
+          "applicable_to": ["complex_vulns", "business_logic"],
+          "steps": 3,
+          "timeout": 300
+        },
+        {
+          "name": "poc_testing",
+          "description": "PoC代码测试",
+          "applicable_to": ["rce", "deserialization", "xxe"],
+          "safety": "sandboxed"
+        }
+      ],
+      
+      "safety_controls": {
+        "rate_limiting": "10 requests/minute",
+        "destructive_operations": "禁止",
+        "data_modification": "只读",
+        "scope_limitation": "仅测试目标"
+      },
+      
+      "confidence_calculation": {
+        "verified": 0.9,
+        "partially_verified": 0.7,
+        "not_verified": 0.3,
+        "false_positive": 0.1
+      },
+      
+      "output_format": {
+        "type": "json",
+        "schema": "schemas/verification-schema.json",
+        "required_fields": ["verification_results", "confidence_scores", "false_positives"]
+      }
+    },
+    
+    "remediation": {
+      "description": "阶段5：修复建议 - 可执行的修复方案",
+      "enabled": true,
+      "depends_on": ["verification"],
+      
+      "generation_methods": {
+        "template_based": {
+          "templates_dir": "templates/remediation/",
+          "categories": ["code_fix", "config_fix", "patch_fix", "process_fix"]
+        },
+        
+        "llm_assisted": {
+          "enabled": true,
+          "model": "deepseek/deepseek-chat",
+          "prompt_templates": "prompts/remediation-generation.txt",
+          "temperature": 0.2,
+          "max_tokens": 1500
+        },
+        
+        "cve_based": {
+          "enabled": true,
+          "sources": ["nvd", "exploit-db", "security_advisories"],
+          "update_frequency": "daily"
+        }
+      },
+      
+      "requirements": {
+        "actionable": true,
+        "specific": true,
+        "prioritized": true,
+        "verifiable": true
+      },
+      
+      "output_format": {
+        "type": "json",
+        "schema": "schemas/remediation-schema.json",
+        "required_fields": ["vulnerability", "remediation_steps", "priority", "references"]
+      }
+    }
+  },
+  
+  "execution_control": {
+    "parallelism": {
+      "max_parallel_stages": 2,
+      "max_parallel_tasks": 4,
+      "resource_limits": {
+        "cpu": "80%",
+        "memory": "2GB",
+        "network": "10Mbps"
+      }
+    },
+    
+    "error_handling": {
+      "retry_policy": {
+        "max_retries": 2,
+        "backoff_factor": 2,
+        "retryable_errors": ["timeout", "network_error", "tool_crash"]
+      },
+      
+      "failover": {
+        "alternative_tools": true,
+        "fallback_methods": true,
+        "graceful_degradation": true
+      },
+      
+      "logging": {
+        "level": "INFO",
+        "format": "json",
+        "retention": "7 days"
+      }
+    },
+    
+    "progress_tracking": {
+      "enabled": true,
+      "update_frequency": "30 seconds",
+      "metrics": ["completion_percentage", "findings_count", "confidence_scores"]
+    }
+  },
+  
+  "quality_assurance": {
+    "validation_checks": [
+      {
+        "name": "schema_validation",
+        "stage": "all",
+        "check": "输出符合JSON schema"
+      },
+      {
+        "name": "confidence_threshold",
+        "stage": "verification",
+        "check": "置信度 >= 0.7才进入下一阶段"
+      },
+      {
+        "name": "evidence_sufficiency",
+        "stage": "evidence_enrichment",
+        "check": "至少2个独立证据源"
+      },
+      {
+        "name": "remediation_actionability",
+        "stage": "remediation",
+        "check": "修复建议必须具体可执行"
+      }
+    ],
+    
+    "performance_metrics": {
+      "stage_duration": "记录各阶段耗时",
+      "tool_efficiency": "记录工具成功率",
+      "finding_quality": "记录验证通过率",
+      "resource_usage": "记录CPU/内存/网络使用"
+    }
+  },
+  
+  "integration_points": {
+    "input": {
+      "formats": ["url", "ip", "domain", "target_list"],
+      "validation": "目标验证和授权检查"
+    },
+    
+    "output": {
+      "formats": ["json", "html", "markdown", "pdf"],
+      "destinations": ["file", "api", "webhook", "database"],
+      "notifications": ["email", "slack", "webhook"]
+    },
+    
+    "external_services": {
+      "cve_databases": ["nvd", "exploit-db", "securityfocus"],
+      "threat_intelligence": ["virustotal", "shodan", "censys"],
+      "vulnerability_scanners": ["nessus", "openvas", "qualys"]
+    }
+  }
+}

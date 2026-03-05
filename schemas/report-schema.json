@@ -1,0 +1,291 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Web Penetration Test Report",
+  "description": "结构化渗透测试报告Schema",
+  "type": "object",
+  
+  "required": [
+    "scan_id",
+    "target", 
+    "timestamp",
+    "findings",
+    "statistics"
+  ],
+  
+  "properties": {
+    "scan_id": {
+      "type": "string",
+      "description": "扫描唯一标识符",
+      "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
+    },
+    
+    "target": {
+      "type": "string",
+      "description": "扫描目标URL或IP",
+      "format": "uri"
+    },
+    
+    "timestamp": {
+      "type": "string",
+      "description": "扫描时间戳",
+      "format": "date-time"
+    },
+    
+    "duration_seconds": {
+      "type": "number",
+      "description": "扫描持续时间（秒）",
+      "minimum": 0
+    },
+    
+    "scanner_version": {
+      "type": "string",
+      "description": "扫描器版本"
+    },
+    
+    "findings": {
+      "type": "array",
+      "description": "发现的安全问题",
+      "items": {
+        "$ref": "#/definitions/finding"
+      },
+      "minItems": 0
+    },
+    
+    "statistics": {
+      "type": "object",
+      "description": "扫描统计信息",
+      "required": ["total_findings", "by_severity", "by_confidence"],
+      "properties": {
+        "total_findings": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "by_severity": {
+          "type": "object",
+          "properties": {
+            "critical": {"type": "integer", "minimum": 0},
+            "high": {"type": "integer", "minimum": 0},
+            "medium": {"type": "integer", "minimum": 0},
+            "low": {"type": "integer", "minimum": 0},
+            "info": {"type": "integer", "minimum": 0}
+          }
+        },
+        "by_confidence": {
+          "type": "object",
+          "properties": {
+            "high": {"type": "integer", "minimum": 0},
+            "medium": {"type": "integer", "minimum": 0},
+            "low": {"type": "integer", "minimum": 0}
+          }
+        },
+        "false_positives": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "merged_findings": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    
+    "tools_used": {
+      "type": "array",
+      "description": "使用的扫描工具",
+      "items": {"type": "string"}
+    },
+    
+    "pipeline_stages": {
+      "type": "array",
+      "description": "执行的pipeline阶段",
+      "items": {
+        "type": "object",
+        "properties": {
+          "stage": {"type": "string"},
+          "status": {"type": "string", "enum": ["completed", "failed", "skipped"]},
+          "duration_seconds": {"type": "number"},
+          "findings_count": {"type": "integer"}
+        }
+      }
+    }
+  },
+  
+  "definitions": {
+    "finding": {
+      "type": "object",
+      "description": "单个安全发现",
+      "required": ["id", "type", "title", "severity", "confidence"],
+      
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "发现唯一ID",
+          "pattern": "^FIND-[A-Z0-9]{8}$"
+        },
+        
+        "type": {
+          "type": "string",
+          "description": "发现类型",
+          "enum": ["vulnerability", "misconfiguration", "information", "weakness"]
+        },
+        
+        "title": {
+          "type": "string",
+          "description": "简短标题",
+          "maxLength": 100
+        },
+        
+        "description": {
+          "type": "string",
+          "description": "详细描述"
+        },
+        
+        "severity": {
+          "type": "string",
+          "description": "严重程度",
+          "enum": ["critical", "high", "medium", "low", "info"]
+        },
+        
+        "confidence": {
+          "type": "number",
+          "description": "置信度分数",
+          "minimum": 0,
+          "maximum": 1
+        },
+        
+        "confidence_level": {
+          "type": "string",
+          "description": "置信度等级",
+          "enum": ["fingerprint", "suspected", "confirmed"]
+        },
+        
+        "evidence": {
+          "type": "array",
+          "description": "证据列表",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {"type": "string", "enum": ["tool_output", "http_response", "version_match", "pattern_match"]},
+              "content": {"type": "string"},
+              "source": {"type": "string"},
+              "timestamp": {"type": "string", "format": "date-time"}
+            }
+          }
+        },
+        
+        "location": {
+          "type": "string",
+          "description": "问题位置",
+          "examples": ["http://target.com/login.php", "/etc/passwd", "Apache 2.4.29"]
+        },
+        
+        "root_cause": {
+          "type": "string",
+          "description": "根本原因分析"
+        },
+        
+        "cwe_ids": {
+          "type": "array",
+          "description": "相关CWE ID",
+          "items": {"type": "string", "pattern": "^CWE-\\d+$"}
+        },
+        
+        "cve_ids": {
+          "type": "array",
+          "description": "相关CVE ID",
+          "items": {"type": "string", "pattern": "^CVE-\\d{4}-\\d+$"}
+        },
+        
+        "verification_steps": {
+          "type": "array",
+          "description": "验证步骤",
+          "items": {
+            "$ref": "#/definitions/verification_step"
+          },
+          "maxItems": 3
+        },
+        
+        "remediation": {
+          "type": "object",
+          "description": "修复建议",
+          "required": ["description"],
+          "properties": {
+            "description": {"type": "string"},
+            "steps": {
+              "type": "array",
+              "items": {"type": "string"}
+            },
+            "code_example": {"type": "string"},
+            "config_example": {"type": "string"},
+            "patch_version": {"type": "string"},
+            "references": {
+              "type": "array",
+              "items": {"type": "string", "format": "uri"}
+            },
+            "priority": {
+              "type": "string",
+              "enum": ["immediate", "high", "medium", "low"]
+            },
+            "estimated_effort": {
+              "type": "string",
+              "enum": ["minutes", "hours", "days", "weeks"]
+            }
+          }
+        },
+        
+        "false_positive_checklist": {
+          "type": "array",
+          "description": "误报检查清单",
+          "items": {"type": "string"}
+        },
+        
+        "merged_from": {
+          "type": "array",
+          "description": "合并自哪些发现",
+          "items": {"type": "string"}
+        },
+        
+        "tags": {
+          "type": "array",
+          "description": "标签",
+          "items": {"type": "string"}
+        },
+        
+        "discovery_timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        
+        "last_verified": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    
+    "verification_step": {
+      "type": "object",
+      "description": "验证步骤",
+      "required": ["description", "expected_result"],
+      
+      "properties": {
+        "step_number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "description": {"type": "string"},
+        "request": {"type": "string"},
+        "expected_response": {"type": "string"},
+        "actual_response": {"type": "string"},
+        "verification_result": {
+          "type": "string",
+          "enum": ["passed", "failed", "inconclusive"]
+        },
+        "risk_level": {
+          "type": "string",
+          "enum": ["none", "low", "medium", "high"]
+        }
+      }
+    }
+  }
+}

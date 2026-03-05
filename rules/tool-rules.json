@@ -1,0 +1,224 @@
+{
+  "tools": {
+    "nmap": {
+      "output_parsing": {
+        "port_pattern": "^(\\d+)/(tcp|udp)\\s+(open|filtered|closed)\\s+(.+)$",
+        "service_pattern": "^Service Info:\\s*(.+)$",
+        "vuln_pattern": "^\\|\\s+(CVE-\\d{4}-\\d+):\\s*(.+)$"
+      },
+      "confidence_mapping": {
+        "version_detection": 0.8,
+        "os_detection": 0.7,
+        "script_output": 0.6
+      }
+    },
+    
+    "nikto": {
+      "severity_mapping": {
+        "OSVDB-": {"severity": "medium", "confidence": 0.7},
+        "Retrieved x-powered-by header": {"severity": "info", "confidence": 0.9},
+        "Allowed HTTP Methods": {"severity": "low", "confidence": 0.8},
+        "Cookie without HttpOnly flag": {"severity": "low", "confidence": 0.9}
+      },
+      "false_positive_patterns": [
+        "Server does not respond with '404' for non-existent files",
+        "Uncommon header 'x-cache' found"
+      ]
+    },
+    
+    "sqlmap": {
+      "injection_types": {
+        "boolean-based blind": {"severity": "high", "confidence": 0.85},
+        "error-based": {"severity": "high", "confidence": 0.9},
+        "UNION query": {"severity": "critical", "confidence": 0.95},
+        "stacked queries": {"severity": "critical", "confidence": 0.9},
+        "time-based blind": {"severity": "high", "confidence": 0.8}
+      },
+      "verification_steps": [
+        "确认注入点参数",
+        "测试布尔条件响应差异",
+        "尝试提取数据库信息",
+        "验证数据库类型和版本"
+      ]
+    },
+    
+    "dirb": {
+      "interesting_responses": {
+        "200": {"severity": "info", "confidence": 1.0},
+        "301": {"severity": "info", "confidence": 1.0},
+        "302": {"severity": "info", "confidence": 1.0},
+        "403": {"severity": "low", "confidence": 0.7},
+        "500": {"severity": "medium", "confidence": 0.6}
+      },
+      "sensitive_files": [
+        "backup",
+        "bak",
+        "old",
+        "tar",
+        "zip",
+        "sql",
+        "db",
+        "config",
+        "env",
+        "secret"
+      ]
+    }
+  },
+  
+  "merging_rules": {
+    "by_root_cause": {
+      "description": "基于根本原因合并发现",
+      "match_fields": ["root_cause", "location", "type"],
+      "similarity_threshold": 0.8
+    },
+    
+    "by_vulnerability": {
+      "description": "基于漏洞类型合并",
+      "match_fields": ["cwe_ids", "cve_ids", "title"],
+      "similarity_threshold": 0.7
+    },
+    
+    "cross_tool": {
+      "description": "跨工具结果合并",
+      "example": "nmap发现的开放端口 + nikto发现的web漏洞 = 综合web服务漏洞",
+      "logic": "相同服务不同角度的发现应合并"
+    }
+  },
+  
+  "confidence_calculation": {
+    "factors": {
+      "tool_reliability": {
+        "nmap": 0.9,
+        "sqlmap": 0.95,
+        "nikto": 0.7,
+        "dirb": 0.8,
+        "gobuster": 0.8
+      },
+      "evidence_count": "每增加一个证据源，置信度增加0.1（最大0.3）",
+      "corroboration": "多个工具一致发现，置信度乘1.2",
+      "manual_verification": "手动验证通过，置信度设为1.0"
+    },
+    
+    "levels": {
+      "fingerprint": {
+        "min": 0.3,
+        "max": 0.6,
+        "description": "基于版本/配置指纹匹配，需要进一步验证"
+      },
+      "suspected": {
+        "min": 0.6,
+        "max": 0.8,
+        "description": "有间接证据支持，可能性较高"
+      },
+      "confirmed": {
+        "min": 0.8,
+        "max": 1.0,
+        "description": "有直接证据或可复现，基本确认"
+      }
+    }
+  },
+  
+  "verification_templates": {
+    "minimal_http": {
+      "description": "最小化HTTP验证步骤",
+      "max_steps": 3,
+      "requirements": [
+        "每个步骤必须是低风险的",
+        "步骤之间应有逻辑依赖",
+        "必须有明确的预期结果",
+        "应该能够自动化执行"
+      ],
+      "example": [
+        "步骤1: 发送探测请求，检查响应特征",
+        "步骤2: 发送验证请求，检查特定模式",
+        "步骤3: 发送确认请求，验证漏洞存在"
+      ]
+    },
+    
+    "sql_injection": {
+      "steps": [
+        {
+          "description": "测试单引号注入",
+          "request": "GET /page?id=1' HTTP/1.1",
+          "expected": "SQL语法错误或异常响应",
+          "risk": "low"
+        },
+        {
+          "description": "测试布尔条件",
+          "request": "GET /page?id=1 AND 1=1 HTTP/1.1",
+          "expected": "正常页面（true条件）",
+          "risk": "low"
+        },
+        {
+          "description": "测试布尔条件",
+          "request": "GET /page?id=1 AND 1=2 HTTP/1.1",
+          "expected": "不同页面或错误（false条件）",
+          "risk": "low"
+        }
+      ]
+    },
+    
+    "xss": {
+      "steps": [
+        {
+          "description": "测试反射型XSS",
+          "request": "GET /search?q=<script>alert(1)</script> HTTP/1.1",
+          "expected": "脚本未过滤，原样返回",
+          "risk": "low"
+        }
+      ]
+    }
+  },
+  
+  "remediation_templates": {
+    "code_fix": {
+      "format": "修复{file}文件的第{line}行，将代码从'{old_code}'改为'{new_code}'",
+      "example": "修复login.php文件的第42行，将代码从'$query = \"SELECT * FROM users WHERE username='\" . $_POST['username'] . \"' AND password='\" . $_POST['password'] . \"'\";'改为使用参数化查询"
+    },
+    
+    "config_fix": {
+      "format": "修改{config_file}配置文件，设置{key}={value}",
+      "example": "修改php.ini配置文件，设置display_errors=Off"
+    },
+    
+    "patch_fix": {
+      "format": "升级{software}到版本{version}或更高，修复CVE-{cve_id}",
+      "example": "升级Apache HTTP Server到版本2.4.53或更高，修复CVE-2022-26377"
+    },
+    
+    "process_fix": {
+      "format": "在{process}流程中添加{step}步骤",
+      "example": "在代码审查流程中添加安全代码审查步骤，重点关注输入验证和输出编码"
+    }
+  },
+  
+  "false_positive_checklists": {
+    "version_based": [
+      "确认实际版本与检测版本是否一致",
+      "检查是否有补丁或变种版本",
+      "验证版本字符串是否被篡改或伪造",
+      "检查版本检测的准确性"
+    ],
+    
+    "configuration_based": [
+      "确认默认配置与实际配置的差异",
+      "检查是否有安全加固措施",
+      "验证配置是否被环境变量覆盖",
+      "检查配置文件的加载顺序"
+    ],
+    
+    "network_based": [
+      "检查是否有代理、防火墙或WAF干扰",
+      "验证网络路径是否一致",
+      "检查DNS解析是否正确",
+      "确认SSL/TLS中间件的影响"
+    ],
+    
+    "tool_limitation": [
+      "检查工具版本和已知问题",
+      "验证工具配置是否正确",
+      "检查是否有误报模式",
+      "尝试使用不同工具交叉验证"
+    ]
+  }
+}
