@@ -31,7 +31,7 @@
 ## 📁 项目结构
 
 ```
-clawedhacker-agent/
+ClawdHacker/
 ├── AGENTS.md                    # 渗透测试工作区配置
 ├── SOUL.md                      # 核心原则和身份定义
 ├── IDENTITY.md                  # Agent身份信息
@@ -68,10 +68,10 @@ clawedhacker-agent/
 ### 2. 配置Agent
 ```bash
 # 克隆仓库
-git clone https://github.com/your-org/clawedhacker-agent.git
+git clone https://github.com/whosm123/ClawdHacker.git
 
 # 配置OpenClaw workspace
-cp -r clawedhacker-agent/* ~/.openclaw/workspace-clawedhacker/
+cp -r ClawdHacker/* ~/.openclaw/workspace-clawedhacker/
 ```
 
 ### 3. 运行渗透测试
@@ -221,29 +221,3 @@ GET /api/v1/status
 - 保持代码可读性和可维护性
 - 添加必要的测试用例
 - 更新相关文档
-
-## 📄 许可证
-
-本项目采用MIT许可证。详见 [LICENSE](LICENSE) 文件。
-
-## 🙏 致谢
-
-- **OpenClaw团队** - 提供强大的AI Agent平台
-- **Kali Linux社区** - 优秀的渗透测试工具集
-- **Antigravity Awesome Skills** - 丰富的技能库资源
-- **所有贡献者** - 感谢你们的支持和贡献
-
-## 📞 联系方式
-
-- **GitHub Issues**: [报告问题](https://github.com/your-org/clawedhacker-agent/issues)
-- **文档**: [查看完整文档](https://docs.your-org.com/clawedhacker)
-- **社区**: [加入Discord讨论](https://discord.gg/your-community)
-
----
-
-**ClawedHacker - 专业、严谨、证据驱动的渗透测试专家**
-
-> "安全第一，证据为王。准确发现，严谨验证，实用建议。"
-
----
-*最后更新: 2026-03-05 | 版本: 1.0.0 | 作者: Makari*
