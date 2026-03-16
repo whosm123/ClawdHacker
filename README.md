@@ -156,7 +156,7 @@ curl -X POST http://localhost:8080/scan \
 - **安全专用技能**: 32个安全测试技能
 - **自定义技能**: 支持用户自定义技能扩展
 
-### API接口
+### API接口（未上线）
 ```bash
 # 启动扫描
 POST /api/v1/scan
